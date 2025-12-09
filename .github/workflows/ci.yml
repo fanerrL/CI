@@ -1,43 +1,56 @@
-name: Python CI with Docker
+name: Python CI with Docker and Deploy
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
+  # 构建任务 (保持不变)
   build-and-push-docker-image:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # 授予写入 GitHub Packages (包含 GHCR) 的权限
-
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 步骤 2: 登录到 GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }} # github.actor 是触发工作流的用户名
-          password: ${{ secrets.GITHUB_TOKEN }} # GITHUB_TOKEN 是 GitHub Actions 自动生成的令牌
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-            # ... (登录步骤) ...
-
-      # 新增步骤：提取 Docker 元数据 (包括自动转换为小写的标签)
       - name: Extract metadata (tags, labels) for Docker
-        id: meta  # 给这个步骤一个 ID，方便后面引用
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
 
-      # 修改步骤：使用上一步生成的元数据
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}      # 使用 metadata-action 的输出作为标签
-          labels: ${{ steps.meta.outputs.labels }}  # 同时还可以添加标准的镜像标签
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
+  # 新增的部署任务
+  deploy:
+    # 确保在构建任务成功后才运行
+    needs: build-and-push-docker-image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            # cd到部署脚本所在的目录，然后执行它
+            # 假设你把 deploy.sh 放在了 /root 目录下
+            cd /root
+            ./deploy.sh
