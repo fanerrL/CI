@@ -1,36 +1,33 @@
-name: Deploy Static Website
+name: Python CI with Docker
 
 on:
   push:
     branches: [ "main" ]
 
-# 授予工作流写入仓库的权限，用于发布 Pages
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 jobs:
-  deploy:
+  build-and-push-docker-image:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }} # 让 GitHub 知道部署的 URL
+    permissions:
+      contents: read
+      packages: write # 授予写入 GitHub Packages (包含 GHCR) 的权限
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 步骤2: 设置 Pages
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      # 步骤3: 上传构建产物 (这里就是整个仓库)
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      # 步骤 2: 登录到 GitHub Container Registry
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          path: '.' # 上传当前目录所有文件
+          registry: ghcr.io
+          username: ${{ github.actor }} # github.actor 是触发工作流的用户名
+          password: ${{ secrets.GITHUB_TOKEN }} # GITHUB_TOKEN 是 GitHub Actions 自动生成的令牌
 
-      # 步骤4: 部署到 GitHub Pages
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # 步骤 3: 构建并推送 Docker 镜像
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: . # Dockerfile 的上下文路径
+          push: true  # 明确指示要推送镜像
+          tags: ghcr.io/${{ github.repository }}:latest # 镜像的标签
+          # ghcr.io/你的用户名/你的仓库名:latest
